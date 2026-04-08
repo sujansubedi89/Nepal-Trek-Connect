@@ -1,4 +1,6 @@
 import Link from 'next/link';
+export const dynamic = 'force-dynamic';
+
 export default function PaymentFailurePage() {
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">

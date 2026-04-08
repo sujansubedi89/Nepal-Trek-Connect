@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { verifyESewaPayment } from '@/lib/payment';
+export const dynamic = 'force-dynamic';
 
 export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
