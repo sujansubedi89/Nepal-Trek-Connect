@@ -4,6 +4,7 @@ import { useState, useEffect,use } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { initiateESewaPayment, submitToESewa } from '@/lib/payment';
+import ChatBot from '@/components/common/ChatBot';
 
 export default function BookingPage({
   params,
@@ -83,10 +84,16 @@ useEffect(() => {
           setAuthError(true);
           router.push('/login');
         } else {
-          alert(axiosError.response?.data?.error || 'Booking failed. Please try again.');
+          // Silently redirect to home instead of showing error
+          setTimeout(() => {
+            router.push('/');
+          }, 1500);
         }
       } else {
-        alert('Booking failed. Please try again.');
+        // Silently redirect to home instead of showing error
+        setTimeout(() => {
+          router.push('/');
+        }, 1500);
       }
       
       setLoading(false);
@@ -160,6 +167,31 @@ useEffect(() => {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                className="bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed opacity-50"
+                disabled
+              >
+                <span>💭</span>
+                <span>Chat Available</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (formData.whatsapp_number) {
+                    window.open(`https://wa.me/${formData.whatsapp_number}`, '_blank');
+                  } else {
+                    alert('Please enter WhatsApp number first');
+                  }
+                }}
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
+              >
+                <span>💬</span>
+                <span>Send Message</span>
+              </button>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-2">Number of People *</label>
               <input
@@ -194,23 +226,24 @@ useEffect(() => {
             </div>
 
             <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              type="button"
+              onClick={() => {
+                // Company's WhatsApp number from env
+                const companyWhatsAppNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '9779846958184';
+                const message = `Hi, I'd like to book the trek with these details:%0AName: ${formData.full_name}%0AEmail: ${formData.email}%0APhone: ${formData.phone}%0AWhatsApp: ${formData.whatsapp_number}%0ANumber of People: ${formData.number_of_people}%0AStart Date: ${formData.start_date}%0ASpecial Requests: ${formData.special_requests}`;
+                window.open(`https://wa.me/${companyWhatsAppNumber}?text=${message}`, '_blank');
+              }}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2"
             >
-              {loading ? (
-                <>Processing...</>
-              ) : (
-                <>
-                  <span>Pay with eSewa</span>
-                  <img src="https://esewa.com.np/common/images/esewa-logo.png" alt="eSewa" className="h-6" />
-                </>
-                
-              )}
+              <span>💬</span>
+              <span>WhatsApp Me</span>
             </button>
           </form>
         </div>
       </div>
+
+      {/* ChatBot Component */}
+      <ChatBot />
     </div>
   );
 }

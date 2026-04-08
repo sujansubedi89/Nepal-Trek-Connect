@@ -13,7 +13,7 @@ import {
     MapCoordinate
 } from '@/types'; 
 // Import your utilities and constants (assuming these paths are correct)
-import { getImageUrl, formatPrice, getWhatsAppLink } from '@/lib/utils';
+import { getImageUrl, getWhatsAppLink } from '@/lib/utils';
 import { DIFFICULTY_LABELS, DIFFICULTY_COLORS } from '@/lib/constants';
 
 
@@ -85,16 +85,12 @@ export default async function TrekDetailPage({
     return DIFFICULTY_COLORS[difficultySlug] || 'bg-gray-100 text-gray-800'; 
   };
     
-  const price = formatPrice(trek.price_usd);
-  const discountedPrice = trek.discounted_price ? formatPrice(trek.discounted_price) : null;
-  const finalPriceDisplay = discountedPrice || price;
   const whatsAppMessage = `Hi, I'm interested in the "${trek.title}" trek and would like to know more.`;
 
-
-  return (
-    <div className="min-h-screen bg-gray-100">
-      
-      {/* Hero Image Section */}
+  return (
+    <div className="min-h-screen bg-gray-100">
+      
+      {/* Hero Image Section */}
       <div className="relative h-96 w-full">
         <Image
           src={getImageUrl(trek.hero_image)}
@@ -136,31 +132,19 @@ export default async function TrekDetailPage({
               <div className="text-sm text-gray-600">Max Altitude</div>
               <div className="font-bold text-lg">{trek.max_altitude}m ({trek.max_altitude_feet}ft)</div>
             </div>
-            <div>
-              <div className="text-3xl mb-2">💰</div>
-              <div className="text-sm text-gray-600">Price From</div>
-              <div className={`font-extrabold text-2xl ${discountedPrice ? 'text-red-600' : 'text-blue-600'}`}>
-                {finalPriceDisplay}
-              </div>
-              {trek.discounted_price && (
-                  <div className="text-sm text-gray-500 line-through">
-                      {price}
-                  </div>
-              )}
-            </div>
-          </div>
-        </div>
+          </div>
+        </div>
 
-        {/* Description */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-2xl font-bold mb-4 border-b pb-2">Trek Overview</h2>
-          <p className="text-gray-700 mb-4 leading-relaxed">
-            {trek.short_description}
-          </p>
-          <p className="text-gray-700 leading-relaxed">
-            {trek.long_description}
-          </p>
-          
+        {/* Description */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-4 border-b pb-2">Trek Overview</h2>
+          <p className="text-gray-700 mb-4 leading-relaxed">
+            {trek.short_description}
+          </p>
+          <p className="text-gray-700 leading-relaxed">
+            {trek.long_description}
+          </p>
+          
           {/* MAP COORDINATES Section */}
           {trek.map_coordinates && trek.map_coordinates.length > 0 && (
             <div className='mt-6'>

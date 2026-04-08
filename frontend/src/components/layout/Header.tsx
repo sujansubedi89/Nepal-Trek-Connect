@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaSearch, FaBars, FaTimes, FaUser } from 'react-icons/fa';
+import { FaBars, FaTimes } from 'react-icons/fa';
 import { SITE_NAME } from '@/lib/constants';
 
 export default function Header() {
@@ -57,11 +57,7 @@ export default function Header() {
               </Link>
             ))}
             
-            <Link href="/auth/login" className="flex items-center space-x-1 text-gray-700 hover:text-primary-600 transition-colors">
-              <FaUser className="text-sm" />
-              <span className="text-sm font-medium">Login</span>
-            </Link>
-            
+
             <Link href="/treks" className="btn-primary">
               Book Now
             </Link>
@@ -94,13 +90,7 @@ export default function Header() {
               </Link>
             ))}
             <Link
-              href="/auth/login"
-              onClick={() => setIsMenuOpen(false)}
-              className="block py-2 px-4 text-gray-700 hover:bg-gray-100 rounded-lg"
-            >
-              Login / Signup
-            </Link>
-            <Link
+
               href="/treks"
               onClick={() => setIsMenuOpen(false)}
               className="block py-2 px-4 bg-primary-600 text-white text-center rounded-lg font-semibold"

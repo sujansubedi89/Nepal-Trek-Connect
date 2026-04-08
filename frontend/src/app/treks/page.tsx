@@ -105,9 +105,6 @@ className="shadow-xl"
                     <span className="text-sm text-gray-500">
                       📅 {trek.duration_days} days
                     </span>
-                    <span className="text-xl font-bold text-blue-600">
-                      ${trek.price_usd}
-                    </span>
                   </div>
                 </div>
               </a>
