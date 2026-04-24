@@ -1,13 +1,4 @@
-/** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Fixes the "Exit Code 1" by ignoring TypeScript/Lint errors during build
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-
   images: {
     remotePatterns: [
       {
@@ -18,14 +9,12 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        // This allows your images from the Django backend to load correctly
-        hostname: '://onrender.com', 
-        pathname: '/media/**',
+        hostname: 'your-production-domain.com',
+        pathname: '/uploads/**',
       }
     ],
-    dangerouslyAllowSVG: true,
-    // Set to true to avoid Vercel image optimization limits on free tier
-    unoptimized: true, 
+     dangerouslyAllowSVG: true,
+    unoptimized: process.env.NODE_ENV === 'development', // Disable optimization in dev
   },
   
   env: {

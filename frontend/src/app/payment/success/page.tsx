@@ -1,10 +1,8 @@
-export const dynamic = 'force-dynamic';
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { verifyESewaPayment } from '@/lib/payment';
-
 
 export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
