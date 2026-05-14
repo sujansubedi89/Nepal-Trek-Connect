@@ -9,8 +9,28 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'your-production-domain.com',
-        pathname: '/uploads/**',
+        hostname: 'your-production-backend.com',
+        pathname: '/media/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.vercel.app',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.onrender.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.fly.dev',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.railway.app',
+        pathname: '/**',
       }
     ],
      dangerouslyAllowSVG: true,

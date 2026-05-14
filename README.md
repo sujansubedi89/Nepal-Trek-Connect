@@ -36,66 +36,113 @@
 
 ---
 
-## 💻 Getting Started
+## � Deployment Guide
 
-Follow these instructions to set up the project locally for development and testing.
+This project can be deployed for free using the following services:
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or higher)
-- [Python](https://www.python.org/) (3.10 or higher)
-- [Git](https://git-scm.com/)
+- GitHub account
+- Stripe account (for payments)
+- Optional: Khalti and eSewa merchant accounts
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/yourusername/Nepal-Trek-Connect.git
-cd Nepal-Trek-Connect
-```
+### Step 1: Prepare Your Code
+1. **Generate a Django secret key:**
+   ```bash
+   python generate_secret.py
+   ```
+   Copy the generated SECRET_KEY.
 
-### 2. Backend Setup
-Navigate to the backend directory and set up the Python virtual environment:
-```bash
-cd backend
-python -m venv venv
+2. **Create environment files:**
+   - Copy `backend/.env.example` to `backend/.env`
+   - Fill in your actual values
 
-# Activate virtual environment (Windows)
-venv\Scripts\activate
-# Activate virtual environment (Mac/Linux)
-source venv/bin/activate
+3. **Push to GitHub:**
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git branch -M main
+   git remote add origin https://github.com/yourusername/nepal-trek-connect.git
+   git push -u origin main
+   ```
 
-# Install dependencies
-pip install -r requirements.txt
+### Step 2: Deploy Frontend (Vercel - Free)
+1. Go to [vercel.com](https://vercel.com) and sign up/login
+2. Click "New Project"
+3. Import your GitHub repository
+4. Configure project:
+   - **Framework Preset:** Next.js
+   - **Root Directory:** `frontend`
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `.next`
+5. Add environment variables:
+   - `NEXT_PUBLIC_API_URL`: Your backend URL (will add after backend deployment)
+   - `NEXT_PUBLIC_STRIPE_PUBLIC_KEY`: Your Stripe publishable key
+   - `NEXT_PUBLIC_KHALTI_PUBLIC_KEY`: Your Khalti public key
+   - `NEXT_PUBLIC_WHATSAPP_NUMBER`: `9779846958184`
+6. Click "Deploy"
 
-# Set up environment variables (Create a .env file based on .env.example)
-cp .env.example .env
+### Step 3: Deploy Database (Supabase - Free)
+1. Go to [supabase.com](https://supabase.com) and sign up
+2. Create a new project
+3. Go to Settings → Database → Connection string
+4. Copy the PostgreSQL connection string (URI format)
 
-# Run database migrations
-python manage.py migrate
+### Step 4: Deploy Backend (Render - Free)
+1. Go to [render.com](https://render.com) and sign up
+2. Click "New +" → "Web Service"
+3. Connect your GitHub repository
+4. Configure service:
+   - **Name:** nepal-trek-backend
+   - **Runtime:** Python 3
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `python manage.py migrate && python manage.py runserver 0.0.0.0:$PORT`
+5. Add environment variables:
+   - `SECRET_KEY`: Your generated secret key
+   - `DEBUG`: `false`
+   - `DATABASE_URL`: Your Supabase connection string
+   - `ALLOWED_HOSTS`: Your Render backend URL
+   - `CORS_ALLOWED_ORIGINS`: Your Vercel frontend URL
+   - `STRIPE_PUBLIC_KEY`: Your Stripe keys
+   - `STRIPE_SECRET_KEY`: Your Stripe keys
+   - `KHALTI_PUBLIC_KEY`: Your Khalti keys
+   - `KHALTI_SECRET_KEY`: Your Khalti keys
+   - `ESEWA_MERCHANT_CODE`: `EPAYTEST` (sandbox)
+   - `WHATSAPP_NUMBER`: `9779846958184`
+6. Click "Create Web Service"
 
-# Create a superuser (admin)
-python manage.py createsuperuser
+### Step 5: Update Frontend Environment
+1. Go back to Vercel dashboard
+2. Update `NEXT_PUBLIC_API_URL` with your Render backend URL
+3. Redeploy the frontend
 
-# Start the Django development server
-python manage.py runserver
-```
-The backend server will be running at `http://127.0.0.1:8000/`.
+### Step 6: Test Your Deployment
+1. Visit your Vercel frontend URL
+2. Try registering a user
+3. Browse treks
+4. Test the booking flow (with Stripe test cards)
 
-### 3. Frontend Setup
-Open a new terminal window, navigate to the frontend directory, and install dependencies:
-```bash
-cd frontend
+### Alternative Free Hosting Options
 
-# Install packages
-npm install
-# or yarn install
+#### Backend Alternatives:
+- **Fly.io**: `fly.io` (free tier available)
+- **Railway**: `railway.app` (free tier available)
 
-# Set up environment variables (Create a .env.local file based on your needs)
-# Add your API URLs and Stripe keys here
+#### Database Alternatives:
+- **Neon**: `neon.tech` (free tier)
+- **ElephantSQL**: `elephantsql.com` (free tier)
 
-# Start the Next.js development server
-npm run dev
-# or yarn dev
-```
-The frontend application will be running at `http://localhost:3000/`.
+### ⚠️ Important Notes
+- **Free tiers have limitations**: Database size, bandwidth, etc.
+- **Media uploads**: Free backends may lose uploaded files. Consider using Cloudinary free tier for images.
+- **Payments**: Stripe test mode works for demo. Live payments require merchant accounts.
+- **Domain**: Free hosting provides subdomains. Custom domains cost extra.
+
+### 🔧 Troubleshooting
+- **CORS errors**: Double-check `CORS_ALLOWED_ORIGINS` in backend
+- **Database connection**: Ensure `DATABASE_URL` is correct
+- **Static files**: WhiteNoise handles static files automatically
+- **Media files**: Consider external storage for production
 
 ---
 

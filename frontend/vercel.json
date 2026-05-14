@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "regions": ["sin1"],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@next_public_api_url",
+    "NEXT_PUBLIC_STRIPE_PUBLIC_KEY": "@next_public_stripe_public_key",
+    "NEXT_PUBLIC_KHALTI_PUBLIC_KEY": "@next_public_khalti_public_key",
+    "NEXT_PUBLIC_WHATSAPP_NUMBER": "@next_public_whatsapp_number"
+  }
+}
