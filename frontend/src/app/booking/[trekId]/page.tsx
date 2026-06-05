@@ -1,38 +1,47 @@
 'use client';
+// ============================================================
+// FILE: frontend/src/app/booking/[trekId]/page.tsx
+// PURPOSE: Booking form page. User fills in details and pays.
+//          KEY CHANGE: Check if user is logged in FIRST.
+//          If not → redirect to /login?redirect=/booking/ID
+//          so after login they come back here automatically.
+// ============================================================
 
-import { useState, useEffect,use } from 'react';
+import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { isAuthenticated } from '@/lib/auth';
 import { initiateESewaPayment, submitToESewa } from '@/lib/payment';
 import ChatBot from '@/components/common/ChatBot';
+
+// Trek type — what the API returns for a trek
+interface Trek {
+  id: number;
+  title: string;
+  price_per_person: number;
+  duration_days: number;
+  difficulty: string;
+}
 
 export default function BookingPage({
   params,
 }: {
   params: Promise<{ trekId: string }>;
 }) {
-  // FIX 1: Unwrap params using React.use() for Next.js 15
+  // Unwrap the dynamic route parameter (Next.js 15 requires React.use())
   const { trekId } = use(params);
-  const [trek, setTrek] = useState(null);
-
-// When page loads, fetch the trek
-useEffect(() => {
-  const fetchTrek = async () => {
-    const response = await api.get(`/treks/${trekId}/`);
-    setTrek(response.data);
-  };
-  fetchTrek();
-}, [trekId]);
-
   const router = useRouter();
+
+  const [trek, setTrek] = useState<Trek | null>(null);
   const [loading, setLoading] = useState(false);
-  const [authError, setAuthError] = useState(false);
-  
+  const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState('');
+
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
     phone: '',
-    country_code: '',
+    country_code: '+977',
     whatsapp_number: '',
     country: '',
     number_of_people: 1,
@@ -40,88 +49,139 @@ useEffect(() => {
     special_requests: '',
   });
 
+  // ──────────────────────────────────────────────────────────────
+  // AUTH CHECK — runs when page first loads
+  // If not logged in, redirect to /login with a "redirect" param
+  // so they come back here after logging in
+  // ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      // Build the redirect URL: /login?redirect=/booking/123
+      // encodeURIComponent encodes special chars like / in the URL
+      router.push(`/login?redirect=${encodeURIComponent(`/booking/${trekId}`)}`);
+      return;
+    }
+
+    // User IS logged in — fetch the trek details
+    const fetchTrek = async () => {
+      try {
+        const response = await api.get(`/treks/${trekId}/`);
+        setTrek(response.data);
+      } catch (err) {
+        console.error('Failed to load trek:', err);
+        setError('Failed to load trek details. Please try again.');
+      } finally {
+        setPageLoading(false);  // Stop showing loading spinner
+      }
+    };
+
+    fetchTrek();
+  }, [trekId, router]);
+
+  // Calculate total price: trek price × number of people
+  const totalPrice = trek
+    ? trek.price_per_person * formData.number_of_people
+    : 0;
+
+  // ──────────────────────────────────────────────────────────────
+  // FORM SUBMIT — creates booking then initiates eSewa payment
+  // ──────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setAuthError(false);
+    setError('');
 
     try {
-      console.log('Creating booking for trek:', trekId);
-      
-      // See exactly what you're sending
+      // STEP 1: Create the booking in Django
+      // POST /api/bookings/ with form data
       const bookingData = {
-        trek: trekId,
-        ...formData,
+        trek: trekId,   // Which trek they're booking
+        ...formData,    // All the form fields
       };
-      console.log('📤 Sending booking data:', bookingData);
-      console.log('📤 FormData contents:', formData);
 
-      // Step 1: Create booking
+      console.log('Creating booking:', bookingData);
       const bookingResponse = await api.post('/bookings/', bookingData);
-
-      console.log('✅ Booking created:', bookingResponse.data);
       const bookingId = bookingResponse.data.booking_id;
+      console.log('Booking created, ID:', bookingId);
 
-      // Step 2: Initiate eSewa payment
+      // STEP 2: Ask Django to generate eSewa payment parameters
+      // POST /api/payments/esewa/initiate/ with bookingId
       const paymentData = await initiateESewaPayment(bookingId);
-      console.log('Payment initiated:', paymentData);
+      console.log('Payment data received:', paymentData);
 
-      // Step 3: Redirect to eSewa
+      // STEP 3: Submit a hidden form to eSewa's payment page
+      // This redirects the browser to eSewa's payment gateway
+      // After payment, eSewa redirects back to our success/failure URLs
       submitToESewa(paymentData.esewa_params, paymentData.esewa_url);
-      
-    } catch (error: unknown) {
-      console.error('❌ Booking error:', error);
-      
-      // Handle 401 Unauthorized
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { status?: number; data?: { error?: string } } };
-        
-        console.error('❌ Error response data:', axiosError.response?.data);
-        console.error('❌ Error status:', axiosError.response?.status);
-        
-        if (axiosError.response?.status === 401) {
-          alert('Your session has expired. Please login again.');
-          setAuthError(true);
-          router.push('/login');
+
+    } catch (err: unknown) {
+      console.error('Booking failed:', err);
+
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axiosErr = err as { response?: { status?: number; data?: Record<string, string[]> } };
+        const status = axiosErr.response?.status;
+        const data = axiosErr.response?.data;
+
+        if (status === 401) {
+          // Token expired — send back to login
+          router.push(`/login?redirect=${encodeURIComponent(`/booking/${trekId}`)}`);
+          return;
+        }
+
+        // Show field-specific errors from Django
+        if (data) {
+          const messages = Object.entries(data)
+            .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+            .join(' | ');
+          setError(messages);
         } else {
-          // Silently redirect to home instead of showing error
-          setTimeout(() => {
-            router.push('/');
-          }, 1500);
+          setError('Booking failed. Please check your details and try again.');
         }
       } else {
-        // Silently redirect to home instead of showing error
-        setTimeout(() => {
-          router.push('/');
-        }, 1500);
+        setError('Network error. Please check your connection.');
       }
-      
       setLoading(false);
     }
   };
+
+  // ── LOADING STATE ──
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 py-12">
       <div className="max-w-2xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow-md p-8">
+
+          {/* Trek Summary at top of form */}
+          {trek && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <h2 className="font-bold text-blue-900 text-lg">{trek.title}</h2>
+              <div className="flex gap-4 text-sm text-blue-700 mt-1">
+                <span>⏱ {trek.duration_days} days</span>
+                <span>⚡ {trek.difficulty}</span>
+                <span>💰 NPR {trek.price_per_person?.toLocaleString()} / person</span>
+              </div>
+            </div>
+          )}
+
           <h1 className="text-3xl font-bold mb-6">Book Your Trek</h1>
 
-          {/* Show auth error */}
-          {authError && (
-            <div className="bg-red-100 border-2 border-red-400 rounded-lg p-4 mb-6">
-              <p className="text-red-800 font-semibold">
-                ⚠️ You must be logged in to make a booking!
-              </p>
-              <button
-                onClick={() => router.push('/login')}
-                className="mt-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
-              >
-                Go to Login
-              </button>
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-50 border border-red-300 text-red-700 rounded-lg px-4 py-3 mb-6">
+              ⚠️ {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* Full Name */}
             <div>
               <label className="block text-sm font-medium mb-2">Full Name *</label>
               <input
@@ -130,9 +190,11 @@ useEffect(() => {
                 value={formData.full_name}
                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Ram Shrestha"
               />
             </div>
 
+            {/* Email */}
             <div>
               <label className="block text-sm font-medium mb-2">Email *</label>
               <input
@@ -144,6 +206,7 @@ useEffect(() => {
               />
             </div>
 
+            {/* Phone + WhatsApp */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Phone *</label>
@@ -155,7 +218,6 @@ useEffect(() => {
                   className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              
               <div>
                 <label className="block text-sm font-medium mb-2">WhatsApp</label>
                 <input
@@ -167,54 +229,49 @@ useEffect(() => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                className="bg-gray-400 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2 cursor-not-allowed opacity-50"
-                disabled
-              >
-                <span>💭</span>
-                <span>Chat Available</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (formData.whatsapp_number) {
-                    window.open(`https://wa.me/${formData.whatsapp_number}`, '_blank');
-                  } else {
-                    alert('Please enter WhatsApp number first');
-                  }
-                }}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg flex items-center justify-center gap-2"
-              >
-                <span>💬</span>
-                <span>Send Message</span>
-              </button>
+            {/* Country */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Country</label>
+              <input
+                type="text"
+                value={formData.country}
+                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Nepal"
+              />
             </div>
 
+            {/* Number of People */}
             <div>
               <label className="block text-sm font-medium mb-2">Number of People *</label>
               <input
                 type="number"
                 min="1"
+                max="20"
                 required
                 value={formData.number_of_people}
-                onChange={(e) => setFormData({ ...formData, number_of_people: parseInt(e.target.value) })}
+                onChange={(e) =>
+                  setFormData({ ...formData, number_of_people: parseInt(e.target.value) || 1 })
+                }
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
+            {/* Start Date */}
             <div>
               <label className="block text-sm font-medium mb-2">Start Date *</label>
               <input
                 type="date"
                 required
+                // min: can't book in the past — today is the earliest
+                min={new Date().toISOString().split('T')[0]}
                 value={formData.start_date}
                 onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
+            {/* Special Requests */}
             <div>
               <label className="block text-sm font-medium mb-2">Special Requests</label>
               <textarea
@@ -222,27 +279,63 @@ useEffect(() => {
                 value={formData.special_requests}
                 onChange={(e) => setFormData({ ...formData, special_requests: e.target.value })}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="Vegetarian meals, altitude sickness medication, porter required..."
               />
             </div>
 
+            {/* Price Summary */}
+            {trek && (
+              <div className="bg-gray-50 rounded-lg p-4 border">
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>NPR {trek.price_per_person?.toLocaleString()} × {formData.number_of_people} people</span>
+                  <span>NPR {totalPrice.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between font-bold text-gray-900 mt-2 text-lg">
+                  <span>Total</span>
+                  <span>NPR {totalPrice.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Pay with eSewa Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                  Processing...
+                </span>
+              ) : (
+                <>
+                  <span>💚</span>
+                  <span>Pay with eSewa — NPR {totalPrice.toLocaleString()}</span>
+                </>
+              )}
+            </button>
+
+            {/* WhatsApp alternative */}
             <button
               type="button"
               onClick={() => {
-                // Company's WhatsApp number from env
-                const companyWhatsAppNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '9779846958184';
-                const message = `Hi, I'd like to book the trek with these details:%0AName: ${formData.full_name}%0AEmail: ${formData.email}%0APhone: ${formData.phone}%0AWhatsApp: ${formData.whatsapp_number}%0ANumber of People: ${formData.number_of_people}%0AStart Date: ${formData.start_date}%0ASpecial Requests: ${formData.special_requests}`;
-                window.open(`https://wa.me/${companyWhatsAppNumber}?text=${message}`, '_blank');
+                const number = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '9779846958184';
+                const msg = encodeURIComponent(
+                  `Hi, I'd like to book ${trek?.title}.\nName: ${formData.full_name}\nEmail: ${formData.email}\nPhone: ${formData.phone}\nPeople: ${formData.number_of_people}\nDate: ${formData.start_date}`
+                );
+                window.open(`https://wa.me/${number}?text=${msg}`, '_blank');
               }}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2"
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
             >
               <span>💬</span>
-              <span>WhatsApp Me</span>
+              <span>Or contact via WhatsApp</span>
             </button>
+
           </form>
         </div>
       </div>
 
-      {/* ChatBot Component */}
       <ChatBot />
     </div>
   );

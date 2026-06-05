@@ -10,7 +10,9 @@ from apps.bookings.models import Booking
 
 class InitiateESewaPaymentView(APIView):
     """Generate eSewa payment parameters"""
-    permission_classes = [AllowAny]
+    # FIX: was AllowAny — but we use request.user below, so must be authenticated!
+    # AllowAny means request.user = AnonymousUser → has no bookings → crash
+    permission_classes = [IsAuthenticated]
     
     def post(self, request):
         booking_id = request.data.get('booking_id')
