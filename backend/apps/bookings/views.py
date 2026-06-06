@@ -17,10 +17,13 @@ class BookingViewSet(viewsets.ModelViewSet):
     retrieve: Get booking details
     """
     serializer_class = BookingSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
+
         """Return bookings for current user"""
+        if self.request.user.is_anonymous:
+            return Booking.objects.none()
         return Booking.objects.filter(user=self.request.user)
     
     def get_serializer_class(self):
@@ -67,7 +70,7 @@ class BookingViewSet(viewsets.ModelViewSet):
         Trek: {booking.trek.title}
         Date: {booking.start_date}
         Number of People: {booking.number_of_people}
-        Total Price: ${booking.total_price}
+        Total Price: NPR {float(booking.total_price):.2f}
         
         Please proceed to payment to confirm your booking.
         

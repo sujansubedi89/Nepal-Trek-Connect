@@ -1,33 +1,44 @@
+import base64
+import json
+import uuid
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated ,AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.conf import settings
-import requests
-import hashlib
+from django.shortcuts import redirect
 from .models import Payment
+from .utils import generate_esewa_signature
 from apps.bookings.models import Booking
 
+
 class InitiateESewaPaymentView(APIView):
-    """Generate eSewa payment parameters"""
-    # FIX: was AllowAny — but we use request.user below, so must be authenticated!
-    # AllowAny means request.user = AnonymousUser → has no bookings → crash
     permission_classes = [IsAuthenticated]
-    
+
     def post(self, request):
         booking_id = request.data.get('booking_id')
-        
+
         try:
             booking = Booking.objects.get(booking_id=booking_id, user=request.user)
         except Booking.DoesNotExist:
-            return Response(
-                {'error': 'Booking not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Create payment record
+            return Response({'error': 'Booking not found'}, status=404)
+
+        conf = settings.ESEWA_SETTINGS
+
+        # CRITICAL: Generate a NEW unique transaction_uuid every single attempt
+        # eSewa sandbox rejects duplicate UUIDs with 409 Conflict
+        transaction_uuid = f"{booking.booking_id}-{uuid.uuid4().hex[:8].upper()}"
+
+        # Clean up old pending payments
+        Payment.objects.filter(
+            booking=booking,
+            payment_method='esewa',
+            status='pending'
+        ).delete()
+
+        # Create new payment record — store transaction_uuid as transaction_id
         payment = Payment.objects.create(
-            transaction_id=f"ESEWA-{booking.booking_id}",
+            transaction_id=transaction_uuid,
             booking=booking,
             user=request.user,
             payment_method='esewa',
@@ -35,108 +46,91 @@ class InitiateESewaPaymentView(APIView):
             currency='NPR',
             status='pending'
         )
-        
-        # Calculate amount (eSewa works in Paisa, so multiply by 100)
-        amount = float(booking.total_price)
-        
-        # eSewa payment parameters
-        esewa_params = {
-            'amt': amount,
-            'psc': 0,  # Service charge
-            'pdc': 0,  # Delivery charge
-            'txAmt': 0,  # Tax amount
-            'tAmt': amount,  # Total amount
-            'pid': booking.booking_id,  # Product/Booking ID
-            'scd': settings.ESEWA_MERCHANT_CODE,
-            'su': settings.ESEWA_SUCCESS_URL,
-            'fu': settings.ESEWA_FAILURE_URL,
+
+        # Amount MUST be formatted to exactly 2 decimal places
+        # "854.05" in signature must exactly match "854.05" in form field
+        amount_str = "{:.2f}".format(float(booking.total_price))
+
+        signature = generate_esewa_signature(
+            total_amount=amount_str,
+            transaction_uuid=transaction_uuid,
+            product_code=conf["MERCHANT_ID"],
+            secret_key=conf["SECRET_KEY"]
+        )
+
+        esewa_payload = {
+            "amount": amount_str,
+            "tax_amount": "0",
+            "total_amount": amount_str,
+            "transaction_uuid": transaction_uuid,
+            "product_code": conf["MERCHANT_ID"],
+            "product_service_charge": "0",
+            "product_delivery_charge": "0",
+            "success_url": conf["SUCCESS_URL"],
+            "failure_url": conf["FAILURE_URL"],
+            "signed_field_names": "total_amount,transaction_uuid,product_code",
+            "signature": signature,
+            "esewa_url": conf["INITIATE_URL"],
         }
-        
+
+        # Debug log
+        print(f"[eSewa] transaction_uuid: {transaction_uuid}")
+        print(f"[eSewa] amount: {amount_str}")
+        print(f"[eSewa] signature message: total_amount={amount_str},transaction_uuid={transaction_uuid},product_code={conf['MERCHANT_ID']}")
+        print(f"[eSewa] signature: {signature}")
+
         return Response({
             'payment_id': payment.id,
-            'esewa_params': esewa_params,
-            'esewa_url': settings.ESEWA_PAYMENT_URL,
+            'esewa_payload': esewa_payload,
             'booking_id': booking.booking_id,
         })
 
 
 class VerifyESewaPaymentView(APIView):
-    """Verify eSewa payment after redirect"""
-    permission_classes = [IsAuthenticated]
-    
+    # AllowAny because eSewa hits this URL directly (not the logged-in user)
+    permission_classes = [AllowAny]
+
     def get(self, request):
-        # eSewa sends these parameters after payment
-        oid = request.query_params.get('oid')  # Booking ID
-        amt = request.query_params.get('amt')  # Amount
-        refId = request.query_params.get('refId')  # eSewa reference ID
-        
-        if not all([oid, amt, refId]):
-            return Response(
-                {'error': 'Missing payment parameters'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+        encoded_data = request.query_params.get('data')
+
+        if not encoded_data:
+            return redirect('http://localhost:3000/payment/failure?error=no_data')
+
         try:
-            booking = Booking.objects.get(booking_id=oid, user=request.user)
-        except Booking.DoesNotExist:
-            return Response(
-                {'error': 'Booking not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        
-        # Verify payment with eSewa
-        verify_url = settings.ESEWA_VERIFY_URL
-        verify_params = {
-            'amt': amt,
-            'scd': settings.ESEWA_MERCHANT_CODE,
-            'rid': refId,
-            'pid': oid,
-        }
-        
-        try:
-            response = requests.get(verify_url, params=verify_params)
-            
-            # eSewa returns XML with "Success" or "Failure"
-            if 'Success' in response.text:
-                # Payment verified successfully
-                payment = Payment.objects.filter(
-                    booking=booking,
-                    payment_method='esewa'
-                ).first()
-                
-                if payment:
-                    payment.transaction_id = refId
-                    payment.status = 'completed'
-                    payment.gateway_response = {
-                        'response': response.text,
-                        'refId': refId,
-                        'amount': amt
-                    }
-                    payment.save()
-                
-                # Update booking status
-                booking.status = 'confirmed'
-                booking.save()
-                
-                # Update trek stats
-                booking.trek.total_bookings += 1
-                booking.trek.save()
-                
-                return Response({
-                    'success': True,
-                    'message': 'Payment verified successfully',
-                    'booking_id': booking.booking_id,
-                    'payment_id': payment.id if payment else None,
-                    'reference_id': refId
-                })
-            else:
-                return Response(
-                    {'error': 'Payment verification failed', 'response': response.text},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-                
+            decoded_bytes = base64.b64decode(encoded_data)
+            decoded_data = json.loads(decoded_bytes.decode('utf-8'))
+            print(f"[eSewa Verify] decoded: {decoded_data}")
         except Exception as e:
-            return Response(
-                {'error': f'Verification error: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return redirect(f'http://localhost:3000/payment/failure?error=decode_failed')
+
+        status_received = decoded_data.get('status')
+        transaction_uuid = decoded_data.get('transaction_uuid')  # e.g. NTC19D00D64-AB12CD34
+        esewa_ref = decoded_data.get('transaction_code')
+
+        if status_received != 'COMPLETE':
+            return redirect(f'http://localhost:3000/payment/failure?error=not_complete')
+
+        try:
+            payment = Payment.objects.get(transaction_id=transaction_uuid)
+            booking = payment.booking
+        except Payment.DoesNotExist:
+            return redirect(f'http://localhost:3000/payment/failure?error=payment_not_found')
+
+        # Update payment
+        payment.status = 'completed'
+        payment.gateway_response = decoded_data
+        if esewa_ref:
+            payment.transaction_id = esewa_ref
+        payment.save()
+
+        # Update booking
+        booking.status = 'confirmed'
+        booking.save()
+
+        booking.trek.total_bookings += 1
+        booking.trek.save()
+
+        # Redirect to Next.js success page
+        return redirect(
+            f'http://localhost:3000/payment/success?booking_id={booking.booking_id}'
+        )

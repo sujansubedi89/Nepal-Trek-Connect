@@ -14,38 +14,29 @@ export interface ESewaPaymentParams {
 
 export interface ESewaInitiateResponse {
   payment_id: number;
-  esewa_params: ESewaPaymentParams;
-  esewa_url: string;
+  esewa_payload: Record<string, string>;  // all fields including esewa_url
   booking_id: string;
 }
 
-export const initiateESewaPayment = async (
-  bookingId: string
-): Promise<ESewaInitiateResponse> => {
-  const response = await api.post('/payments/esewa/initiate/', {
-    booking_id: bookingId,
-  });
+export const initiateESewaPayment = async (bookingId: string): Promise<ESewaInitiateResponse> => {
+  const response = await api.post('/payments/esewa/initiate/', { booking_id: bookingId });
   return response.data;
 };
-
-export const verifyESewaPayment = async (
-  oid: string,
-  amt: string,
-  refId: string
-) => {
+export const verifyESewaPayment = async (data: string) => {
   const response = await api.get('/payments/esewa/verify/', {
-    params: { oid, amt, refId },
+    params: { data },  // v2 sends single 'data' param
   });
   return response.data;
 };
 
 // Submit form to eSewa
-export const submitToESewa = (params: ESewaPaymentParams, url: string) => {
+export const submitToESewa = (payload: Record<string, string>, url: string) => {
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = url;
 
-  Object.entries(params).forEach(([key, value]) => {
+  Object.entries(payload).forEach(([key, value]) => {
+    if (key === 'esewa_url') return; // skip — it's the action URL, not a field
     const input = document.createElement('input');
     input.type = 'hidden';
     input.name = key;
@@ -56,3 +47,15 @@ export const submitToESewa = (params: ESewaPaymentParams, url: string) => {
   document.body.appendChild(form);
   form.submit();
 };
+
+//   Object.entries(params).forEach(([key, value]) => {
+//     const input = document.createElement('input');
+//     input.type = 'hidden';
+//     input.name = key;
+//     input.value = String(value);
+//     form.appendChild(input);
+//   });
+
+//   document.body.appendChild(form);
+//   form.submit();
+// };

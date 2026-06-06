@@ -18,6 +18,9 @@ import ChatBot from '@/components/common/ChatBot';
 interface Trek {
   id: number;
   title: string;
+  slug:string;
+  price_usd:string;
+  discounted_price:string;
   price_per_person: number;
   duration_days: number;
   difficulty: string;
@@ -77,11 +80,9 @@ export default function BookingPage({
 
     fetchTrek();
   }, [trekId, router]);
-
+const pricePerPerson=trek?parseFloat(trek.discounted_price || trek.price_usd):0;
   // Calculate total price: trek price × number of people
-  const totalPrice = trek
-    ? trek.price_per_person * formData.number_of_people
-    : 0;
+  const totalPrice =pricePerPerson * formData.number_of_people;
 
   // ──────────────────────────────────────────────────────────────
   // FORM SUBMIT — creates booking then initiates eSewa payment
@@ -95,7 +96,7 @@ export default function BookingPage({
       // STEP 1: Create the booking in Django
       // POST /api/bookings/ with form data
       const bookingData = {
-        trek: trekId,   // Which trek they're booking
+        trek: trek!.id,   // Which trek they're booking
         ...formData,    // All the form fields
       };
 
@@ -107,12 +108,8 @@ export default function BookingPage({
       // STEP 2: Ask Django to generate eSewa payment parameters
       // POST /api/payments/esewa/initiate/ with bookingId
       const paymentData = await initiateESewaPayment(bookingId);
-      console.log('Payment data received:', paymentData);
-
-      // STEP 3: Submit a hidden form to eSewa's payment page
-      // This redirects the browser to eSewa's payment gateway
-      // After payment, eSewa redirects back to our success/failure URLs
-      submitToESewa(paymentData.esewa_params, paymentData.esewa_url);
+// payload is now under esewa_payload key
+submitToESewa(paymentData.esewa_payload, paymentData.esewa_payload.esewa_url);
 
     } catch (err: unknown) {
       console.error('Booking failed:', err);

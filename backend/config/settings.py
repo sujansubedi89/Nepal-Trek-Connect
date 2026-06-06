@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-key')
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['localhost','127.0.0.1','192.168.0.102']
 
 # Application definition
 INSTALLED_APPS = [
@@ -25,7 +25,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'storages',
-    
+
+    'rest_framework_simplejwt.token_blacklist',
     # Local apps
     'apps.accounts',
     'apps.treks',
@@ -104,7 +105,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [BASE_DIR / 'static']
+# STATICFILES_DIRS = [BASE_DIR / 'static']
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files
@@ -137,8 +138,8 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
 }
 
 # CORS Settings
@@ -174,12 +175,15 @@ KHALTI_PUBLIC_KEY = config('KHALTI_PUBLIC_KEY', default='')
 KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY', default='')
 
 # eSewa Sandbox Configuration
-ESEWA_MERCHANT_CODE = config('ESEWA_MERCHANT_CODE', default='EPAYTEST')
-ESEWA_SUCCESS_URL = config('ESEWA_SUCCESS_URL', default='http://localhost:3000/payment/success')
-ESEWA_FAILURE_URL = config('ESEWA_FAILURE_URL', default='http://localhost:3000/payment/failure')
-ESEWA_PAYMENT_URL = 'https://uat.esewa.com.np/epay/main'  # Sandbox
-# For production: 'https://esewa.com.np/epay/main'
-ESEWA_VERIFY_URL = 'https://uat.esewa.com.np/epay/transrec'  # Sandbox
+ESEWA_SETTINGS = {
+    "MERCHANT_ID": config('ESEWA_MERCHANT_CODE', default='EPAYTEST'),
+    "SECRET_KEY": config('ESEWA_SECRET_KEY', default='8gBm/:&EnhH.1/q'),
+    "INITIATE_URL": "https://rc-epay.esewa.com.np/api/epay/main/v2/form",
+    # SUCCESS_URL hits Django directly — eSewa POSTs/GETs here
+    "SUCCESS_URL": config('ESEWA_SUCCESS_URL', default='http://localhost:8000/api/payments/esewa/verify/'),
+    "FAILURE_URL": config('ESEWA_FAILURE_URL', default='http://localhost:3000/payment/failure'),
+}
+ # Sandbox
 # WhatsApp
 WHATSAPP_NUMBER = config('WHATSAPP_NUMBER', default='9779846958184')
 
