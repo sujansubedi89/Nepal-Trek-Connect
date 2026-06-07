@@ -31,7 +31,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.treks',
     'apps.bookings',
-    'apps.payments',
+  
     'apps.reviews',
     'apps.seo'
 ]
@@ -159,13 +159,13 @@ CORS_ALLOW_METHODS = [
     'PUT',
 ]
 # Email Settings
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-
+EMAIL_HOST_USER = config('EMAIL_HOST_USER',default='nepaltrekconnect@gmail.com')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='fjdeudgwdahliwls')
+DEFAULT_FROM_EMAIL='<nepaltrekconnect@gmail.com>'
 # Payment Settings
 STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
@@ -176,12 +176,11 @@ KHALTI_SECRET_KEY = config('KHALTI_SECRET_KEY', default='')
 
 # eSewa Sandbox Configuration
 ESEWA_SETTINGS = {
-    "MERCHANT_ID": config('ESEWA_MERCHANT_CODE', default='EPAYTEST'),
-    "SECRET_KEY": config('ESEWA_SECRET_KEY', default='8gBm/:&EnhH.1/q'),
+    "MERCHANT_ID": "EPAYTEST",  # Sandbox
+    "SECRET_KEY": "8gBm/:&EnhH.1/q",
     "INITIATE_URL": "https://rc-epay.esewa.com.np/api/epay/main/v2/form",
-    # SUCCESS_URL hits Django directly — eSewa POSTs/GETs here
-    "SUCCESS_URL": config('ESEWA_SUCCESS_URL', default='http://localhost:8000/api/payments/esewa/verify/'),
-    "FAILURE_URL": config('ESEWA_FAILURE_URL', default='http://localhost:3000/payment/failure'),
+    "SUCCESS_URL": "http://localhost:8000/api/bookings/esewa-verify/",
+    "FAILURE_URL": "http://localhost:3000/payment-failed",
 }
  # Sandbox
 # WhatsApp
